@@ -90,14 +90,14 @@ def inspect_page(driver):
         try:
             privacy_by_id = driver.find_element(By.ID, "accept-all-cookies")
             print(f"  ✓ Found button by ID: {privacy_by_id.tag_name}, Visible: {privacy_by_id.is_displayed()}")
-        except:
+        except Exception:
             print("  ✗ Button with id='accept-all-cookies' not found")
         
         # Try by wire:click
         try:
             privacy_by_wire = driver.find_elements(By.XPATH, "//button[@wire:click='onCookieAll']")
             print(f"  Found {len(privacy_by_wire)} buttons with wire:click='onCookieAll'")
-        except:
+        except Exception:
             print("  No buttons with wire:click found")
         
         # Try by text content
@@ -106,7 +106,7 @@ def inspect_page(driver):
         for elem in privacy_elements[:5]:  # Show first 5
             try:
                 print(f"  - Tag: {elem.tag_name}, Text: {elem.text[:50]}, Visible: {elem.is_displayed()}")
-            except:
+            except Exception:
                 print(f"  - Tag: {elem.tag_name}, Text: {elem.text[:50]}")
     except Exception as e:
         print(f"  Error looking for privacy elements: {e}")
@@ -118,7 +118,7 @@ def inspect_page(driver):
         print(f"Found {len(filter_elements)} elements with 'Suchfilter' text")
         for elem in filter_elements:
             print(f"  - Tag: {elem.tag_name}, Text: {elem.text[:50]}")
-    except:
+    except Exception:
         print("  No Suchfilter elements found")
     
     # Look for input fields
@@ -131,7 +131,7 @@ def inspect_page(driver):
             name = inp.get_attribute("name") or ""
             input_id = inp.get_attribute("id") or ""
             print(f"  - Type: {inp.get_attribute('type')}, Placeholder: {placeholder[:30]}, Name: {name}, ID: {input_id[:30]}")
-    except:
+    except Exception:
         print("  No input elements found")
     
     # Look for buttons
@@ -141,7 +141,7 @@ def inspect_page(driver):
         print(f"Found {len(buttons)} button elements")
         for btn in buttons[:10]:  # Show first 10
             print(f"  - Text: {btn.text[:50]}, Type: {btn.get_attribute('type')}")
-    except:
+    except Exception:
         print("  No button elements found")
     
     # Save page source
@@ -182,13 +182,13 @@ if __name__ == "__main__":
                 try:
                     accept_btn = wait.until(EC.element_to_be_clickable((by, selector)))
                     break
-                except:
+                except Exception:
                     continue
             
             if accept_btn:
                 try:
                     accept_btn.click()
-                except:
+                except Exception:
                     # Use JavaScript click as fallback for Livewire
                     driver.execute_script("arguments[0].click();", accept_btn)
                 print("✓ Clicked 'Alle akzeptieren'")
@@ -215,7 +215,7 @@ if __name__ == "__main__":
                 try:
                     filter_btn = wait.until(EC.element_to_be_clickable((by, selector)))
                     break
-                except:
+                except Exception:
                     continue
             
             if filter_btn:
@@ -283,7 +283,7 @@ if __name__ == "__main__":
                                 submit_btn = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
                                 print(f"✓ Found submit button: {selector}")
                                 break
-                            except:
+                            except Exception:
                                 continue
                         
                         if submit_btn:

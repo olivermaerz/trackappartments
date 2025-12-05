@@ -78,12 +78,12 @@ Set to False to see the browser window (useful for debugging)."""
 QUIET_HOURS_ENABLED = True
 """Whether quiet hours are enabled. Set to False to scrape 24/7."""
 
-QUIET_HOURS_START = 21
-"""Start of quiet hours in 24-hour format (21 = 9 PM)."""
+QUIET_HOURS_START = 19
+"""Start of quiet hours in 24-hour format."""
 
 QUIET_HOURS_END = 8
 """End of quiet hours in 24-hour format (8 = 8 AM).
-If END < START, quiet hours span midnight (e.g., 9 PM to 8 AM)."""
+If END < START, quiet hours span midnight."""
 
 # ============================================================================
 # DATABASE SETTINGS

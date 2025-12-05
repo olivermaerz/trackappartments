@@ -22,7 +22,6 @@ Example:
     - Check every 1 minute (±0.5 min random) when new listings found
     - Skip scraping during quiet hours (9 PM - 8 AM by default)
 """
-import schedule
 import time
 import random
 from datetime import datetime
@@ -224,14 +223,14 @@ def run_scheduler():
         - Automatically pauses during quiet hours
         - Resumes automatically when quiet hours end
     """
-    print(f"🏠 Apartment Tracker started")
+    print("🏠 Apartment Tracker started")
     print(f"📅 Base interval: {config.SCRAPE_INTERVAL_MINUTES} minutes (±{config.SCRAPE_INTERVAL_RANDOM_MINUTES} min)")
     print(f"⚡ Short interval (new listings): {config.SCRAPE_INTERVAL_NEW_LISTINGS_MINUTES} minutes (±{config.SCRAPE_INTERVAL_NEW_LISTINGS_RANDOM_MINUTES} min)")
     
     if config.QUIET_HOURS_ENABLED:
         print(f"🌙 Quiet hours: {config.QUIET_HOURS_START:02d}:00 - {config.QUIET_HOURS_END:02d}:00")
     else:
-        print(f"🌙 Quiet hours: Disabled")
+        print("🌙 Quiet hours: Disabled")
     
     print(f"🔔 Notifications via: {config.NOTIFICATION_METHOD}")
     print(f"💾 Database: {config.DATABASE_PATH}")
@@ -260,7 +259,7 @@ def run_scheduler():
                     # Wait until quiet hours end
                     while is_quiet_hours():
                         time.sleep(60)  # Check every minute
-                    print(f"✅ Quiet hours ended. Resuming...")
+                    print("✅ Quiet hours ended. Resuming...")
                     break
             
             if remainder > 0:

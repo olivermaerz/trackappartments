@@ -32,9 +32,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException
 import config
 from notifications import send_notification
 
@@ -115,14 +114,14 @@ def accept_privacy_settings(driver, wait_time=10):
             try:
                 accept_button = wait.until(EC.element_to_be_clickable((by, selector)))
                 break
-            except:
+            except Exception:
                 continue
         
         if accept_button:
             # Try regular click first
             try:
                 accept_button.click()
-            except:
+            except Exception:
                 # If regular click fails, use JavaScript click (more reliable for Livewire)
                 driver.execute_script("arguments[0].click();", accept_button)
             
@@ -176,7 +175,7 @@ def open_search_filters(driver, wait_time=10):
             try:
                 filter_button = wait.until(EC.element_to_be_clickable((by, selector)))
                 break
-            except:
+            except Exception:
                 continue
         
         if filter_button:
@@ -231,7 +230,7 @@ def set_search_criteria(driver, wait_time=15):
         try:
             wait.until(EC.presence_of_element_located((By.XPATH, "//span[contains(text(), 'Meine Suchkriterien')]")))
             print("✓ Modal is visible")
-        except:
+        except Exception:
             print("⚠ Modal heading not found, continuing anyway...")
         
         time.sleep(2)  # Additional wait for form fields to be ready
@@ -308,7 +307,7 @@ def set_search_criteria(driver, wait_time=15):
                     search_button = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
                     print(f"✓ Found submit button using: {selector}")
                     break
-                except:
+                except Exception:
                     continue
             
             if not search_button:
@@ -330,7 +329,7 @@ def set_search_criteria(driver, wait_time=15):
             try:
                 wait.until(EC.invisibility_of_element_located((By.XPATH, "//span[contains(text(), 'Meine Suchkriterien')]")))
                 print("✓ Modal closed, waiting for results...")
-            except:
+            except Exception:
                 print("⚠ Modal might still be visible, continuing...")
             
             time.sleep(5 + random.uniform(0, 2))  # Additional wait for Livewire to process and results to render
@@ -476,7 +475,7 @@ def extract_listings(driver):
                     text = btn.text[:50] or ""
                     if "list" in classes.lower() or "item" in classes.lower():
                         print(f"  Button {i+1}: class='{classes[:50]}', text='{text}'")
-            except:
+            except Exception:
                 pass
             
             return []
@@ -530,7 +529,7 @@ def extract_listings(driver):
                 # If we can't find it, it means we've reached the end of available listings
                 try:
                     parent_div = button.find_element(By.XPATH, "./ancestor::div[starts-with(@id, 'apartment-')]")
-                except:
+                except Exception:
                     # No more listings available - this is expected after the first page
                     print(f"  ✓ Reached end of listings at {idx+1} listings")
                     break
@@ -622,7 +621,7 @@ def extract_listings(driver):
                             ".//a[contains(@href, 'degewo') or contains(@href, 'gesobau') or contains(@href, 'gewobag') or contains(@href, 'howoge') or contains(@href, 'stadtundland') or contains(@href, 'wbm')]")
                         if deeplink_links:
                             listing_data["url"] = deeplink_links[0].get_attribute("href")
-                    except:
+                    except Exception:
                         pass
                 
                 # Extract additional details from the details section
@@ -640,9 +639,9 @@ def extract_listings(driver):
                                 listing_data["extra_costs"] = value
                             elif "WBS" in label:
                                 listing_data["wbs"] = value
-                        except:
+                        except Exception:
                             continue
-                except:
+                except Exception:
                     pass
                 
                 # Extract title from aria-label if available
@@ -756,15 +755,15 @@ def init_database():
     # Add new columns if they don't exist (for existing databases)
     try:
         cursor.execute("ALTER TABLE listings ADD COLUMN extra_costs TEXT")
-    except:
+    except Exception:
         pass
     try:
         cursor.execute("ALTER TABLE listings ADD COLUMN wbs TEXT")
-    except:
+    except Exception:
         pass
     try:
         cursor.execute("ALTER TABLE listings ADD COLUMN image_url TEXT")
-    except:
+    except Exception:
         pass
     
     conn.commit()

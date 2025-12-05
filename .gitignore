@@ -34,3 +34,8 @@ Thumbs.db
 
 # Database
 apartments.db
+
+#uv project files
+uv.lock
+pyproject.toml
+.python-version
