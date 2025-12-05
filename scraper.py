@@ -245,9 +245,9 @@ def set_search_criteria(driver, wait_time=15):
             time.sleep(0.5)
             kaltmiete_max.clear()
             kaltmiete_max.send_keys(str(config.SEARCH_CRITERIA["kaltmiete_max"]))
-            print(f"✓ Set Kaltmiete max to {config.SEARCH_CRITERIA['kaltmiete_max']} €")
+            print(f"✓ Set Cold rent max to {config.SEARCH_CRITERIA['kaltmiete_max']} €")
         except Exception as e:
-            print(f"⚠ Could not set Kaltmiete max: {e}")
+            print(f"⚠ Could not set Cold rent max: {e}")
         
         # Set Zimmer minimum
         try:
@@ -258,9 +258,9 @@ def set_search_criteria(driver, wait_time=15):
             time.sleep(0.5)
             zimmer_min.clear()
             zimmer_min.send_keys(str(config.SEARCH_CRITERIA["zimmer_min"]))
-            print(f"✓ Set Zimmer min to {config.SEARCH_CRITERIA['zimmer_min']}")
+            print(f"✓ Set Number of rooms min to {config.SEARCH_CRITERIA['zimmer_min']}")
         except Exception as e:
-            print(f"⚠ Could not set Zimmer min: {e}")
+            print(f"⚠ Could not set Number of rooms min: {e}")
         
         # Set Zimmer maximum
         try:
@@ -271,9 +271,9 @@ def set_search_criteria(driver, wait_time=15):
             time.sleep(0.5)
             zimmer_max.clear()
             zimmer_max.send_keys(str(config.SEARCH_CRITERIA["zimmer_max"]))
-            print(f"✓ Set Zimmer max to {config.SEARCH_CRITERIA['zimmer_max']}")
+            print(f"✓ Set Number of rooms max to {config.SEARCH_CRITERIA['zimmer_max']}")
         except Exception as e:
-            print(f"⚠ Could not set Zimmer max: {e}")
+            print(f"⚠ Could not set Number of rooms max: {e}")
         
         # Set Wohnfläche maximum
         try:
@@ -284,9 +284,9 @@ def set_search_criteria(driver, wait_time=15):
             time.sleep(0.5)
             wohnflaeche_max.clear()
             wohnflaeche_max.send_keys(str(config.SEARCH_CRITERIA["wohnflaeche_max"]))
-            print(f"✓ Set Wohnfläche max to {config.SEARCH_CRITERIA['wohnflaeche_max']} m²")
+            print(f"✓ Set Living area max to {config.SEARCH_CRITERIA['wohnflaeche_max']} m²")
         except Exception as e:
-            print(f"⚠ Could not set Wohnfläche max: {e}")
+            print(f"⚠ Could not set Living area max: {e}")
         
         # Submit the search form
         # The form uses Livewire (wire:submit.prevent="submit") and the button has @click="showModal = false"
@@ -977,11 +977,11 @@ def scrape_apartments():
 {title}
 {address}
 
-Zimmeranzahl: {rooms}
-Wohnfläche: {area} m²
-Kaltmiete: {price} €
-Nebenkosten: {extra_costs}
-WBS: {wbs}
+Number of rooms: {rooms}
+Living area: {area} m²
+Cold rent: {price} €
+Additional costs: {extra_costs}
+WBS permit: {wbs}
 
 {url}"""
                     
@@ -995,23 +995,23 @@ WBS: {wbs}
     
     <table style="border-collapse: collapse; margin: 20px 0;">
         <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>Zimmeranzahl:</strong></td>
+            <td style="padding: 5px 15px 5px 0;"><strong>Number of rooms:</strong></td>
             <td style="padding: 5px;">{rooms}</td>
         </tr>
         <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>Wohnfläche:</strong></td>
+            <td style="padding: 5px 15px 5px 0;"><strong>Living area:</strong></td>
             <td style="padding: 5px;">{area} m²</td>
         </tr>
         <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>Kaltmiete:</strong></td>
+            <td style="padding: 5px 15px 5px 0;"><strong>Cold rent:</strong></td>
             <td style="padding: 5px;">{price} €</td>
         </tr>
         <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>Nebenkosten:</strong></td>
+            <td style="padding: 5px 15px 5px 0;"><strong>Additional costs:</strong></td>
             <td style="padding: 5px;">{extra_costs}</td>
         </tr>
         <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>WBS:</strong></td>
+            <td style="padding: 5px 15px 5px 0;"><strong>WBS permit:</strong></td>
             <td style="padding: 5px;">{wbs}</td>
         </tr>
     </table>
