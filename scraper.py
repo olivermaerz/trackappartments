@@ -28,6 +28,7 @@ import time
 import random
 import sqlite3
 from datetime import datetime
+from urllib.parse import quote_plus
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -364,6 +365,55 @@ def set_search_criteria(driver, wait_time=15):
         return False
 
 
+def parse_german_number(value_str):
+    """
+    Parse a German-formatted number string (e.g., "1.234,56" or "1234,56") to float.
+    
+    Args:
+        value_str (str): Number string in German format (thousands separator: '.', decimal: ',')
+    
+    Returns:
+        float: Parsed number, or 0.0 if parsing fails
+    """
+    if not value_str:
+        return 0.0
+    
+    try:
+        # Remove currency symbols and whitespace
+        cleaned = value_str.replace('€', '').strip()
+        # Remove thousands separators (dots)
+        cleaned = cleaned.replace('.', '')
+        # Replace comma with dot for decimal point
+        cleaned = cleaned.replace(',', '.')
+        return float(cleaned)
+    except (ValueError, AttributeError):
+        return 0.0
+
+
+def format_german_number(value):
+    """
+    Format a float number to German format string (e.g., 1234.56 -> "1.234,56").
+    
+    Args:
+        value (float): Number to format
+    
+    Returns:
+        str: Formatted number string in German format
+    """
+    try:
+        # Format with 2 decimal places
+        formatted = f"{value:,.2f}"
+        # Replace thousands separator (comma) with dot
+        formatted = formatted.replace(',', 'X')
+        # Replace decimal point (dot) with comma
+        formatted = formatted.replace('.', ',')
+        # Replace placeholder back to dot for thousands
+        formatted = formatted.replace('X', '.')
+        return formatted
+    except (ValueError, TypeError):
+        return "0,00"
+
+
 def extract_listings(driver):
     """
     Extract apartment listing data from the current search results page.
@@ -374,7 +424,8 @@ def extract_listings(driver):
     - Number of rooms (Zimmeranzahl)
     - Living area (Wohnfläche) in m²
     - Cold rent (Kaltmiete) in EUR
-    - Additional costs (Nebenkosten) in EUR
+    - Additional costs (Nebenkosten kalt) in EUR
+    - Total rent cold (Brutto Miete kalt = Kaltmiete + Nebenkosten kalt) in EUR
     - WBS permit requirement status
     - Apartment image URL
     
@@ -394,7 +445,8 @@ def extract_listings(driver):
             - price (str): Cold rent in EUR
             - rooms (str): Number of rooms
             - area (str): Living area in m²
-            - extra_costs (str): Additional costs in EUR
+            - extra_costs (str): Additional costs cold (Nebenkosten kalt) in EUR
+            - brutto_miete_kalt (str): Total rent cold (Kaltmiete + Nebenkosten kalt) in EUR
             - wbs (str): WBS permit requirement status
             - image_url (str): URL to apartment image
             - raw_text (str): Raw text from listing button
@@ -492,6 +544,7 @@ def extract_listings(driver):
                     "rooms": "",
                     "area": "",
                     "extra_costs": "",
+                    "brutto_miete_kalt": "",
                     "wbs": "",
                     "image_url": "",
                     "raw_text": "",
@@ -543,12 +596,13 @@ def extract_listings(driver):
                         if deeplink_match:
                             listing_data["url"] = deeplink_match.group(1).replace('\\/', '/')
                         
-                        # Extract extraCosts (Nebenkosten)
+                        # Extract extraCosts (Nebenkosten kalt)
                         extra_costs_match = re.search(r'"extraCosts"\s*:\s*"([^"]+)"', snapshot_attr)
                         if extra_costs_match:
                             extra_costs_value = extra_costs_match.group(1).replace('\\/', '/')
                             # Format: "163,10" -> "163,10 €"
                             listing_data["extra_costs"] = f"{extra_costs_value} €"
+                        
                         
                         # Extract imagePath or imageUrl from main snapshot
                         # Try imagePath first (in item data)
@@ -610,6 +664,7 @@ def extract_listings(driver):
                                         .replace('\\u00dc', 'Ü')
                                         .replace('\\u00df', 'ß'))
                             listing_data["wbs"] = wbs_value
+                        
                 except Exception as e:
                     print(f"    ⚠ Error extracting from snapshot: {e}")
                     pass
@@ -636,11 +691,23 @@ def extract_listings(driver):
                             value = dd.text.strip()
                             
                             if "Nebenkosten" in label:
-                                listing_data["extra_costs"] = value
+                                # Only set extra_costs if not already set
+                                if not listing_data.get("extra_costs"):
+                                    listing_data["extra_costs"] = value
                             elif "WBS" in label:
                                 listing_data["wbs"] = value
                         except Exception:
                             continue
+                except Exception:
+                    pass
+                
+                # Calculate brutto miete kalt (kaltmiete + nebenkosten kalt)
+                try:
+                    price_value = parse_german_number(listing_data.get("price", ""))
+                    extra_costs_value = parse_german_number(listing_data.get("extra_costs", ""))
+                    if price_value > 0 or extra_costs_value > 0:
+                        brutto_total = price_value + extra_costs_value
+                        listing_data["brutto_miete_kalt"] = f"{format_german_number(brutto_total)} €"
                 except Exception:
                     pass
                 
@@ -711,7 +778,8 @@ def init_database():
     - price: Cold rent
     - rooms: Number of rooms
     - area: Living area in m²
-    - extra_costs: Additional costs
+    - extra_costs: Additional costs cold (Nebenkosten kalt)
+    - brutto_miete_kalt: Total rent cold (Kaltmiete + Nebenkosten kalt)
     - wbs: WBS permit requirement
     - image_url: URL to apartment image
     - raw_text: Raw extracted text
@@ -743,6 +811,7 @@ def init_database():
             rooms TEXT,
             area TEXT,
             extra_costs TEXT,
+            brutto_miete_kalt TEXT,
             wbs TEXT,
             image_url TEXT,
             raw_text TEXT,
@@ -763,6 +832,10 @@ def init_database():
         pass
     try:
         cursor.execute("ALTER TABLE listings ADD COLUMN image_url TEXT")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE listings ADD COLUMN brutto_miete_kalt TEXT")
     except Exception:
         pass
     
@@ -793,6 +866,224 @@ def get_seen_listing_urls():
     seen_urls = {row[0] for row in cursor.fetchall()}
     conn.close()
     return seen_urls
+
+
+def get_newest_listing():
+    """
+    Retrieve the newest listing from the database (by first_seen timestamp).
+    
+    Returns:
+        dict: Dictionary containing listing data, or None if no listings exist.
+            The dictionary has the same structure as listings returned by extract_listings().
+    """
+    conn = sqlite3.connect(config.DATABASE_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT url, title, address, price, rooms, area, extra_costs, 
+               brutto_miete_kalt, wbs, image_url, raw_text
+        FROM listings
+        ORDER BY first_seen DESC
+        LIMIT 1
+    """)
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return {
+        "url": row[0] or "",
+        "title": row[1] or "",
+        "address": row[2] or "",
+        "price": row[3] or "",
+        "rooms": row[4] or "",
+        "area": row[5] or "",
+        "extra_costs": row[6] or "",
+        "brutto_miete_kalt": row[7] or "",
+        "wbs": row[8] or "",
+        "image_url": row[9] or "",
+        "raw_text": row[10] or ""
+    }
+
+
+def get_google_maps_url(address):
+    """
+    Generate a Google Maps URL for the given address.
+    
+    Args:
+        address (str): The address to search for in Google Maps
+    
+    Returns:
+        str: Google Maps URL, or empty string if address is invalid
+    """
+    if not address or address == "N/A":
+        return ""
+    
+    # Encode the address for URL
+    encoded_address = quote_plus(address)
+    return f"https://www.google.com/maps/search/?api=1&query={encoded_address}"
+
+
+def translate_wbs_value(wbs_value):
+    """
+    Translate WBS permit values from German to English for display.
+    
+    Args:
+        wbs_value (str): WBS value in German (e.g., "erforderlich", "nicht erforderlich", "unbekannt")
+    
+    Returns:
+        str: Translated value in English, or original value if no translation found
+    """
+    if not wbs_value or wbs_value == "N/A":
+        return wbs_value
+    
+    wbs_lower = wbs_value.lower().strip()
+    
+    translations = {
+        "erforderlich": "required",
+        "nicht erforderlich": "not required",
+        "unbekannt": "unknown"
+    }
+    
+    # Try exact match first
+    if wbs_lower in translations:
+        return translations[wbs_lower]
+    
+    # Try case-insensitive partial match
+    for german, english in translations.items():
+        if german in wbs_lower:
+            return english
+    
+    # Return original if no translation found
+    return wbs_value
+
+
+def send_listing_notification(listing, is_test=False):
+    """
+    Send a notification for a single listing.
+    
+    Args:
+        listing (dict): Listing dictionary with apartment details
+        is_test (bool, optional): If True, marks the notification as a test.
+            Defaults to False.
+    
+    Returns:
+        bool: True if notification was sent successfully, False otherwise.
+    """
+    try:
+        url = listing.get("url", "No URL")
+        title = listing.get("title", listing.get("address", "New listing"))[:100]
+        address = listing.get("address", "N/A")
+        rooms = listing.get("rooms", "N/A")
+        area = listing.get("area", "N/A")
+        price = listing.get("price", "N/A")
+        extra_costs = listing.get("extra_costs", "N/A")
+        brutto_miete_kalt = listing.get("brutto_miete_kalt", "N/A")
+        wbs_raw = listing.get("wbs", "N/A")
+        wbs = translate_wbs_value(wbs_raw)  # Translate for display
+        image_url = listing.get("image_url", "").strip()
+        
+        # Validate image URL
+        if image_url and not (image_url.startswith("http://") or image_url.startswith("https://")):
+            print(f"  ⚠ Invalid image URL format: {image_url[:50]}")
+            image_url = ""
+        
+        # Generate Google Maps URL for the address
+        maps_url = get_google_maps_url(address)
+        
+        # Create plain text message
+        test_prefix = "[TEST] " if is_test else ""
+        message = f"""{test_prefix} {title}
+{rooms} rooms / {area} m² / {brutto_miete_kalt}
+WBS permit: {wbs}
+"""
+        
+        # Create HTML message with clickable address link
+        address_html = f'<a href="{maps_url}" style="color: #1976D2; text-decoration: underline;">{address}</a>' if maps_url else address
+        
+        html_message = f"""<html>
+<head></head>
+<body>
+    <h3>{test_prefix}{title} - {brutto_miete_kalt}</h3>
+    <p><strong>Address:</strong> {address_html}</p>
+    <table style="border-collapse: collapse; margin: 20px 0;">
+        <tr>
+            <td style="padding: 5px 15px 5px 0;"><strong>Number of rooms:</strong></td>
+            <td style="padding: 5px;">{rooms}</td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 15px 5px 0;"><strong>Living area:</strong></td>
+            <td style="padding: 5px;">{area} m²</td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 15px 5px 0;"><strong>Rent cold ("Kaltmiete"):</strong></td>
+            <td style="padding: 5px;">{price} €</td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 15px 5px 0;"><strong>Additional costs (w/o heating costs):</strong></td>
+            <td style="padding: 5px;">{extra_costs}</td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 15px 5px 0;"><strong>Total cold rent incl. additional costs ("Bruttokaltmiete"):</strong></td>
+            <td style="padding: 5px;">{brutto_miete_kalt}</td>
+        </tr>
+        <tr>
+            <td style="padding: 5px 15px 5px 0;"><strong>WBS permit:</strong></td>
+            <td style="padding: 5px;">{wbs}</td>
+        </tr>
+    </table>
+    
+    {f'<p><img src="{image_url}" alt="Apartment image" style="max-width: 600px; border: 1px solid #ddd; border-radius: 4px;"></p>' if (image_url and len(image_url) > 10 and image_url.startswith("http")) else ''}
+    
+    <p><a href="{url}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">View Details</a></p>
+</body>
+</html>"""
+        
+        # Debug: Print image URL if present
+        if image_url:
+            print(f"  Image URL: {image_url}")
+        
+        send_notification(message, html_message=html_message, image_url=image_url)
+        return True
+    except Exception as e:
+        print(f"  ✗ Error sending notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def send_test_email():
+    """
+    Send a test email notification for the newest listing in the database.
+    
+    This function is useful for testing email functionality and seeing changes
+    during development without needing to wait for new listings.
+    
+    Returns:
+        bool: True if test email was sent successfully, False otherwise.
+    """
+    print("\n=== SENDING TEST EMAIL ===\n")
+    
+    listing = get_newest_listing()
+    
+    if not listing:
+        print("✗ No listings found in database. Please run the scraper first to populate the database.")
+        return False
+    
+    print(f"✓ Found newest listing: {listing.get('address', 'N/A')}")
+    print(f"  {listing.get('rooms', '?')} rooms, {listing.get('area', '?')} m², {listing.get('price', '?')} €")
+    print("\nSending test email notification...")
+    
+    success = send_listing_notification(listing, is_test=True)
+    
+    if success:
+        print("✓ Test email sent successfully!")
+    else:
+        print("✗ Failed to send test email")
+    
+    return success
 
 
 def save_listings(listings):
@@ -836,8 +1127,8 @@ def save_listings(listings):
         if url not in seen_urls:
             # New listing
             cursor.execute("""
-                INSERT INTO listings (url, title, address, price, rooms, area, extra_costs, wbs, image_url, raw_text, first_seen, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO listings (url, title, address, price, rooms, area, extra_costs, brutto_miete_kalt, wbs, image_url, raw_text, first_seen, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 listing.get("url"),
                 listing.get("title", ""),
@@ -846,6 +1137,7 @@ def save_listings(listings):
                 listing.get("rooms", ""),
                 listing.get("area", ""),
                 listing.get("extra_costs", ""),
+                listing.get("brutto_miete_kalt", ""),
                 listing.get("wbs", ""),
                 listing.get("image_url", ""),
                 listing.get("raw_text", ""),
@@ -944,7 +1236,7 @@ def scrape_apartments():
                 # Send a summary system notification
                 if new_listings_count == 1:
                     listing = new_listings[0]
-                    summary = f"{listing.get('address', 'New apartment')} - {listing.get('rooms', '?')} Zimmer, {listing.get('area', '?')} m², {listing.get('price', '?')} €"
+                    summary = f"{listing.get('address', 'New apartment')} - {listing.get('rooms', '?')} rooms, {listing.get('area', '?')} m², {listing.get('price', '?')} €"
                 else:
                     summary = f"Found {new_listings_count} new apartments!"
                 
@@ -956,77 +1248,7 @@ def scrape_apartments():
                 )
                 
                 for listing in new_listings:
-                    url = listing.get("url", "No URL")
-                    title = listing.get("title", listing.get("address", "New listing"))[:100]
-                    address = listing.get("address", "N/A")
-                    rooms = listing.get("rooms", "N/A")
-                    area = listing.get("area", "N/A")
-                    price = listing.get("price", "N/A")
-                    extra_costs = listing.get("extra_costs", "N/A")
-                    wbs = listing.get("wbs", "N/A")
-                    image_url = listing.get("image_url", "").strip()
-                    
-                    # Validate image URL
-                    if image_url and not (image_url.startswith("http://") or image_url.startswith("https://")):
-                        print(f"  ⚠ Invalid image URL format: {image_url[:50]}")
-                        image_url = ""
-                    
-                    # Create plain text message
-                    message = f"""New apartment found!
-
-{title}
-{address}
-
-Number of rooms: {rooms}
-Living area: {area} m²
-Cold rent: {price} €
-Additional costs: {extra_costs}
-WBS permit: {wbs}
-
-{url}"""
-                    
-                    # Create HTML message
-                    html_message = f"""<html>
-<head></head>
-<body>
-    <h2>New apartment found!</h2>
-    <h3>{title}</h3>
-    <p><strong>Adresse:</strong> {address}</p>
-    
-    <table style="border-collapse: collapse; margin: 20px 0;">
-        <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>Number of rooms:</strong></td>
-            <td style="padding: 5px;">{rooms}</td>
-        </tr>
-        <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>Living area:</strong></td>
-            <td style="padding: 5px;">{area} m²</td>
-        </tr>
-        <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>Cold rent:</strong></td>
-            <td style="padding: 5px;">{price} €</td>
-        </tr>
-        <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>Additional costs:</strong></td>
-            <td style="padding: 5px;">{extra_costs}</td>
-        </tr>
-        <tr>
-            <td style="padding: 5px 15px 5px 0;"><strong>WBS permit:</strong></td>
-            <td style="padding: 5px;">{wbs}</td>
-        </tr>
-    </table>
-    
-    {f'<p><img src="{image_url}" alt="Apartment image" style="max-width: 600px; border: 1px solid #ddd; border-radius: 4px;"></p>' if (image_url and len(image_url) > 10 and image_url.startswith("http")) else ''}
-    
-    <p><a href="{url}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">View Details</a></p>
-</body>
-</html>"""
-                    
-                    # Debug: Print image URL if present
-                    if image_url:
-                        print(f"  Image URL: {image_url}")
-                    
-                    send_notification(message, html_message=html_message, image_url=image_url)
+                    send_listing_notification(listing, is_test=False)
             else:
                 print("✓ No new listings found")
         else:

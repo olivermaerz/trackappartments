@@ -21,11 +21,15 @@ Example:
     - Check every 5 minutes (±3 min random) normally
     - Check every 1 minute (±0.5 min random) when new listings found
     - Skip scraping during quiet hours (9 PM - 8 AM by default)
+    
+    Send a test email for the newest listing:
+    >>> python main.py --test-email
 """
 import time
 import random
+import argparse
 from datetime import datetime
-from scraper import scrape_apartments, init_database
+from scraper import scrape_apartments, init_database, send_test_email
 import config
 
 
@@ -273,6 +277,29 @@ def run_scheduler():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Apartment tracker - monitors and notifies about new apartment listings",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python main.py                    # Run the scheduler normally
+  python main.py --test-email       # Send a test email for the newest listing
+        """
+    )
+    parser.add_argument(
+        "--test-email",
+        action="store_true",
+        help="Send a test email notification for the newest listing in the database (useful for testing email functionality)"
+    )
+    
+    args = parser.parse_args()
+    
     init_database()
-    run_scheduler()
+    
+    if args.test_email:
+        print("🧪 Test email mode")
+        success = send_test_email()
+        exit(0 if success else 1)
+    else:
+        run_scheduler()
 
